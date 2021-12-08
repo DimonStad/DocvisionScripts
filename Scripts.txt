@@ -1,0 +1,286 @@
+using System;
+using System.Windows.Forms;
+using DocsVision.Platform.ObjectManager;
+using DocsVision.Platform.ObjectModel;
+using DocsVision.BackOffice.WinForms;
+using DocsVision.BackOffice.ObjectModel;
+using DocsVision.BackOffice.ObjectModel.Services;
+using DocsVision.Platform.CardHost;
+using DocsVision.Platform.ObjectModel.Search;
+using DocsVision.BackOffice.WinForms.Design.LayoutItems;
+using DocsVision.BackOffice.WinForms.Design.PropertyControls;
+using System.Linq;
+using System.Drawing;
+using System.Collections.Generic;
+using System.Text;
+using System.Globalization;
+using DevExpress.XtraBars.Ribbon;
+using DevExpress.XtraBars;
+
+
+namespace BackOffice
+{
+    public class CardDocumentЗаявка_на_командировкуScript : CardDocumentScript
+    {
+    
+    #region Properties
+		protected ICustomizableControl CustomizableControl {
+		get {
+			return this.CardControl as ICustomizableControl;
+		}
+	}
+		protected Color DefaultBackgroundColor {get; set;}
+		
+		
+    #endregion
+
+    #region Methods
+
+    #endregion
+
+    #region Event Handlers
+	/*Выводим информацию о карточке по клику*/
+    private void getInfo_ItemClick(System.Object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+    {
+		DocsVision.BackOffice.WinForms.Controls.NumeratorBox  numberControl = CustomizableControl.FindPropertyItem<DocsVision.BackOffice.WinForms.Controls.NumeratorBox >("Number");
+		ICustomPropertyItem CreationDateControl = CustomizableControl.FindPropertyItem<ICustomPropertyItem>("CreationDate");
+		ICustomPropertyItem DateIntoControl = CustomizableControl.FindPropertyItem<ICustomPropertyItem>("DateInto");
+		ICustomPropertyItem DateOnControl = CustomizableControl.FindPropertyItem<ICustomPropertyItem>("DateOn");
+		ICustomPropertyItem ReasonControl = CustomizableControl.FindPropertyItem<ICustomPropertyItem>("Reason");
+				
+		MessageBox.Show(string.Format(
+			"Номер заявки: {0}{1}Дата создания: {2}{3}Дата командировки с: {4}{5}По: {6}{7}Основание для поездки: {8}{9}"
+			,numberControl.Text
+			, Environment.NewLine
+			,CreationDateControl.Control.Text
+			, Environment.NewLine
+			,DateIntoControl.Control.Text
+			, Environment.NewLine
+			,DateOnControl.Control.Text
+			, Environment.NewLine
+			,ReasonControl.Control.Text
+			, Environment.NewLine));
+    }
+
+
+	/*При смене даты, если оба поля заполнены, выводим количество дней*/
+    private void DateInto_DateTimeChanged(System.Object sender, System.EventArgs e)
+    {
+        DevExpress.XtraEditors.DateEdit DateIntoControl = CustomizableControl.FindPropertyItem<DevExpress.XtraEditors.DateEdit>("DateInto");
+		DevExpress.XtraEditors.DateEdit DateOnControl = CustomizableControl.FindPropertyItem<DevExpress.XtraEditors.DateEdit>("DateOn");
+		ILayoutPropertyItem CountDayControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("CountDay");
+		
+		DateTime time = new DateTime();
+		
+		if (DateOnControl.DateTime.Date != time.Date){
+			double tmp = Math.Floor((DateOnControl.DateTime - DateIntoControl.DateTime).TotalDays);
+			CountDayControl.ControlValue = tmp;
+		}
+    }
+	/*При смене даты, если оба поля заполнены, выводим количество дней*/
+    private void DateOn_DateTimeChanged(System.Object sender, System.EventArgs e)
+    {
+        DevExpress.XtraEditors.DateEdit DateIntoControl = CustomizableControl.FindPropertyItem<DevExpress.XtraEditors.DateEdit>("DateInto");
+		DevExpress.XtraEditors.DateEdit DateOnControl = CustomizableControl.FindPropertyItem<DevExpress.XtraEditors.DateEdit>("DateOn");
+		ILayoutPropertyItem CountDayControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("CountDay");
+		
+		DateTime time = new DateTime();
+		
+		if (DateIntoControl.DateTime.Date != time.Date)
+		{
+			double tmp = Math.Floor((DateOnControl.DateTime - DateIntoControl.DateTime).TotalDays);	
+			
+			CountDayControl.ControlValue = tmp;
+		}
+    }
+	/*При изменении состояния выводим сообщение и меняем цвет контрола. + Прячем кнопку*/
+    private void Заявка_на_командировку_StateChanged(System.Object sender, System.EventArgs e)
+    {
+		ICustomPropertyItem stateTechControl = CustomizableControl.FindPropertyItem<ICustomPropertyItem>("State");
+		if(stateTechControl == null) {return;}
+		DefaultBackgroundColor = stateTechControl.Control.BackColor;
+        MessageBox.Show("Состояние изменино");
+		stateTechControl.Control.BackColor = Color.Yellow;
+		
+		
+		BaseCard card = this.BaseObject;
+		RibbonControl ribbon = CustomizableControl.RibbonControl;
+		
+		if(card.SystemInfo.State.DefaultName != "Project")
+		{
+			ribbon.Items["buttonOnApproval"].Visibility = BarItemVisibility.Never;
+		}
+		else
+		{
+			ribbon.Items["buttonOnApproval"].Visibility = BarItemVisibility.Always;
+		}
+    }
+	/*Не даем сохранить карточку если нет названия или неправильно задали даты*/
+    private void Заявка_на_командировку_Saving(System.Object sender, System.ComponentModel.CancelEventArgs e)
+    {
+        ILayoutPropertyItem countDayControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("CountDay");
+		ILayoutPropertyItem nameControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("Name");
+		ICustomPropertyItem numberControl = CustomizableControl.FindPropertyItem<ICustomPropertyItem>("Number");
+		
+		if(nameControl.ControlValue == null){
+			MessageBox.Show("Введите название!");
+			e.Cancel = true;
+		}
+		
+		
+		
+		/* if(numberControl.Control.Text == ""){
+			MessageBox.Show("Сгенерируйте номер!");
+			e.Cancel = true;
+			
+		} */
+		
+		if ((int)countDayControl.ControlValue < 1){
+			MessageBox.Show("Не правильно выбраны даты!");
+			e.Cancel = true;
+		}
+    }
+	
+	/*При смене командеруемого, заполняем телефон и руководителя*/
+	
+    private void commanded_EmployeeChanged(System.Object sender, System.EventArgs e)
+    {
+		ILayoutPropertyItem phoneControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("Phone");
+		ILayoutPropertyItem bossControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("Boss");
+		
+		if (phoneControl == null || bossControl == null){ return;}
+		string phone = string.Empty;
+		ILayoutPropertyItem commandedControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("commanded");
+		Guid commandedId = (Guid)commandedControl.ControlValue;
+		StaffEmployee commanded = CardControl.ObjectContext.GetObject<StaffEmployee>(commandedId);
+		if (commandedControl != null){ 
+			if (commanded != null){ 
+				phone = commanded.Phone;
+			}
+		}
+		phoneControl.ControlValue = phone;
+		phoneControl.Commit();
+		
+		
+		Guid managerId = commanded.Manager.GetObjectId();
+		if (managerId != null)
+		{ 
+		bossControl.ControlValue = managerId;
+		}
+
+		bossControl.Commit();
+		
+    }
+
+	
+    private void City_ValueChanged(System.Object sender, System.EventArgs e)
+    {
+		ILayoutPropertyItem countDayControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("CountDay");
+		ILayoutPropertyItem sumDayControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("SumDay");
+        ILayoutPropertyItem cityControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("City");
+		
+		if (cityControl == null || sumDayControl == null || countDayControl == null){ return;}
+		Guid cityId = (Guid)cityControl.ControlValue;
+		BaseUniversalItem item = CardControl.ObjectContext.GetObject<BaseUniversalItem>(cityId);
+		if (item == null) {MessageBox.Show("Item null"); return;}
+		string  cost = item.ItemCard.MainInfo["Daily"].ToString().Replace('.', ',');
+		try
+		{
+			decimal valueDaily = decimal.Parse(decimal.Parse(cost).ToString("N", CultureInfo.GetCultureInfo("ru-RU")));
+			decimal valueCountDay = Convert.ToDecimal(countDayControl.ControlValue.ToString());
+			sumDayControl.ControlValue = valueDaily * valueCountDay;
+		}
+			catch (FormatException b)
+		{
+		    MessageBox.Show(b.Message);
+		}
+    }
+
+    private void Заявка_на_командировку_CardActivated(System.Object sender, DocsVision.Platform.WinForms.CardActivatedEventArgs e)
+    {
+		if(e.ActivateFlags.HasFlag(ActivateFlags.New)){
+        	ILayoutPropertyItem whoControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("Who");
+			if(whoControl == null) {return;}
+			IStaffService staffServ = CardControl.ObjectContext.GetService<IStaffService>();
+			StaffGroup grp = staffServ.FindGroupByName(null, "Секретарь");
+
+			if(grp == null) {return;}
+			
+			IEnumerable<Guid> employee = grp.EmployeesIds;
+			Guid[] employeeId = employee.ToArray<Guid>();
+			whoControl.ControlValue = employeeId;
+			whoControl.Commit();
+		}
+		
+		
+		BaseCard card = this.BaseObject;
+		RibbonControl ribbon = CustomizableControl.RibbonControl;
+		if(card.SystemInfo.State.DefaultName != "Project")
+		{
+			ribbon.Items["buttonOnApproval"].Visibility = BarItemVisibility.Never;
+		}
+		else
+		{
+			ribbon.Items["buttonOnApproval"].Visibility = BarItemVisibility.Always;
+		}
+		
+    }
+
+
+
+    private void buttonOnApproval_ItemClick(System.Object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+    {
+        BaseCard card = this.BaseObject;
+		IStateService stateService = CardControl.ObjectContext.GetService<IStateService>();
+		StatesStateMachineBranch branch = stateService.FindLineBranchesByStartState(card.SystemInfo.State).FirstOrDefault(x => x.EndState.DefaultName == "OnApproval");
+		if(branch == null) return;
+		card.SystemInfo.State = branch.EndState;
+		Заявка_на_командировку_StateChanged(null, null);
+		CardControl.ObjectContext.SaveObject<BaseCard>(card);
+    }
+
+    private void Заявка_на_командировку_CardClosed(System.Object sender, System.EventArgs e)
+    {
+       
+	    ICustomPropertyItem cond =  CustomizableControl.FindPropertyItem<ICustomPropertyItem>("State");
+	    if(cond==null)return;
+	    cond.Control.BackColor = DefaultBackgroundColor; 
+    }
+
+    private void getPriceTikets_ItemClick(System.Object sender, DevExpress.XtraBars.ItemClickEventArgs e)
+    {
+		DevExpress.XtraEditors.DateEdit DateIntoControl = CustomizableControl.FindPropertyItem<DevExpress.XtraEditors.DateEdit>("DateInto");
+		DevExpress.XtraEditors.DateEdit DateOnControl = CustomizableControl.FindPropertyItem<DevExpress.XtraEditors.DateEdit>("DateOn");
+		ILayoutPropertyItem priceControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("PriceTicket");
+		ILayoutPropertyItem cityControl = CustomizableControl.FindPropertyItem<ILayoutPropertyItem>("City");
+		
+		Guid cityID = (Guid)cityControl.ControlValue;
+		BaseUniversalItem item = CardControl.ObjectContext.GetObject<BaseUniversalItem>(cityID);
+		if(item == null) return;
+		
+		string cityCode = item.ItemCard.MainInfo["CodeAir"].ToString();
+		string there = DateIntoControl.DateTime.ToString("yyyy-MM-dd");
+		string back = DateOnControl.DateTime.ToString("yyyy-MM-dd");
+		
+		try{
+	        ExtensionMethod seMethod = CardControl.Session.ExtensionManager.GetExtensionMethod("GetTicketLibrary", "getSumTicket");
+			seMethod.Parameters.AddNew("homeCity", ParameterValueType.String, "LED");
+			seMethod.Parameters.AddNew("bisTripCity", ParameterValueType.String, cityCode);
+			seMethod.Parameters.AddNew("depart_date", ParameterValueType.String, there);
+			seMethod.Parameters.AddNew("return_date", ParameterValueType.String, back);
+			decimal res = Convert.ToDecimal(seMethod.Execute());
+			if (res > 0){
+				priceControl.ControlValue = res;
+			}else{
+				MessageBox.Show("Нет билетов на указанные даты");
+			}
+		}catch(Exception z){
+			MessageBox.Show(z.Source + " " + z.InnerException + " " + z.StackTrace + " " + z.TargetSite);
+		}
+		
+    }
+
+    #endregion
+
+    }
+}
